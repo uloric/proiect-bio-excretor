@@ -107,7 +107,7 @@
             <button class="food-btn coffee" data-food="coffee">
                 <span class="emoji">☕</span>
                 <span class="meta">
-                    <span class="name">Cafea (Diuretic)</span>
+                    <span class="name">Cafea</span>
                     <span class="desc">Filtrare rapidă · 2.5s</span>
                 </span>
             </button>
@@ -152,9 +152,9 @@ const firebaseConfig = {
         const db  = getDatabase(app);
 
         const FOODS = {
-            water:  { emoji: "💧", culoare: "#fff59d", timpDigestie: 4000, mesajDoctor: "💧 Hidratare optimă! Rinichii filtrează normal, urina este diluată și clară." },
-            coffee: { emoji: "☕", culoare: "#ffee58", timpDigestie: 2500, mesajDoctor: "☕ Efect Diuretic! Cafeaua forțează rinichii să elimine apa mai rapid." },
-            salty:  { emoji: "🧂", culoare: "#f57f17", timpDigestie: 7000, mesajDoctor: "🧂 Exces de sare! Rinichii rețin apa. Urina este foarte concentrată." }
+            water:  { emoji: "💧", culoare: "#fff59d", timpDigestie: 4000, mesajDoctor: "💧 Rinichii filtrează normal, urina este diluată și clară." },
+            coffee: { emoji: "☕", culoare: "#ffee58", timpDigestie: 2500, mesajDoctor: "☕ Cafeaua forțează rinichii să elimine apa mai rapid." },
+            salty:  { emoji: "🧂", culoare: "#f57f17", timpDigestie: 7000, mesajDoctor: "🧂 Rinichii rețin apa. Urina este foarte concentrată." }
         };
 
         const dot = document.getElementById('conn-dot');

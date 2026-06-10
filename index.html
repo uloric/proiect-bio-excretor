@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Sistemul Excretor</title>
+
+    <!-- Roboto for crisp, projector-friendly type (Arial fallback if offline) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+
+    <style>
+      :root { --ui-pad: 28px; }
+
+      html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+
+      /* ── Projection-ready UI overlay ──────────────────────────────
+         Pinned to the top, never intercepts the 3D scene (pointer-events:none)
+         so it can't block the model. */
+      #doctor-ui {
+        position: absolute;
+        top: var(--ui-pad);
+        left: 0;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        z-index: 10;
+        pointer-events: none;
+      }
+
+      #msg-box {
+        max-width: 80vw;
+        padding: 20px 44px;
+        border-radius: 18px;
+        background: rgba(8, 10, 14, 0.55);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+        text-align: center;
+      }
+
+      #mesaj-text {
+        margin: 0;
+        font-family: 'Roboto', Arial, Helvetica, sans-serif;
+        font-weight: 900;
+        font-size: clamp(28px, 4.2vw, 64px);
+        line-height: 1.15;
+        letter-spacing: 0.3px;
+        color: #ffffff;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.85);
+      }
+
+      #doctor-tag {
+        display: block;
+        margin: 0 0 6px 0;
+        font-family: 'Roboto', Arial, sans-serif;
+        font-weight: 700;
+        font-size: clamp(11px, 1.2vw, 16px);
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #4ade80;
+        opacity: 0.9;
+      }
+
+      @keyframes pulseIn {
+        0%   { transform: translateY(-14px) scale(0.96); opacity: 0; }
+        100% { transform: translateY(0) scale(1);        opacity: 1; }
+      }
+      .pulse { animation: pulseIn 0.45s cubic-bezier(.2, .8, .2, 1); }
+
+      #calib-readout {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-family: 'Roboto', monospace;
+        font-size: 13px;
+        letter-spacing: 1px;
+        color: rgba(255, 255, 255, 0.55);
+        background: rgba(0, 0, 0, 0.45);
+        padding: 6px 14px;
+        border-radius: 10px;
+        pointer-events: none;
+        transition: opacity 0.4s ease;
+      }
+
+      #hint {
+        position: absolute;
+        bottom: 46px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        font-family: 'Roboto', Arial, sans-serif;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.4);
+        pointer-events: none;
+        transition: opacity 0.6s ease;
+      }
+
+      .ui-hidden { opacity: 0 !important; }
+    </style>
+
+    <script>
+      AFRAME.registerComponent('normalize-model', {
+        schema: { targetSize: { default: 2.5 }, debug: { default: true } },
+        init: function () {
+          const el = this.el, data = this.data;
+
+          el.addEventListener('model-loaded', () => {
+            const mesh = el.getObject3D('mesh');
+            if (!mesh) return;
+
+            const box = new THREE.Box3().setFromObject(mesh);
+            const size = new THREE.Vector3(), center = new THREE.Vector3();
+            box.getSize(size); box.getCenter(center);
+
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const scale = data.targetSize / maxDim;
+
+            el.setAttribute('scale', `${scale} ${scale} ${scale}`);
+            mesh.position.set(-center.x, -center.y, -center.z);
+
+            if (data.debug) {
+              console.log('[normalize-model] size:', size, 'scale:', scale.toFixed(4));
+            }
+          });
+
+          el.addEventListener('model-error', (e) => {
+            console.error('[normalize-model] GLTF FAILED TO LOAD →', e.detail);
+            setMessage('MODEL FAILED TO LOAD — check console', 'EROARE');
+          });
+        }
+      });
+
+      /* excretion-controller: drives the droplet through the urinary tract.
+           STEP 1 · Kidneys → drop from the top into a kidney
+           STEP 2 · Ureters → travel down the ureter to the bladder
+           STEP 3 · Urethra → drop out + fade (excretion)
+         Duration split: Ureters 60% · Kidneys ~20% · Urethra ~20% */
+      AFRAME.registerComponent('excretion-controller', {
+        init: function () {
+          const sphere = this.el;
+          let busy = false;
+
+          const finish = () => {
+            sphere.setAttribute('visible', false);
+            sphere.setAttribute('material', 'opacity', 1);
+            busy = false;
+            setMessage('Excreție completă. Scanează QR-ul pentru un nou lichid...');
+          };
+
+          sphere.addEventListener('animationcomplete__s1', () => sphere.emit('startS2'));
+          sphere.addEventListener('animationcomplete__s2', () => sphere.emit('startS3'));
+          sphere.addEventListener('animationcomplete__s3', finish);
+
+          window.triggerExcretion = function (data) {
+            data = data || {};
+            const color = data.culoare      || '#fff59d';
+            const total = parseInt(data.timpDigestie, 10) || 4000;
+            const msg   = data.mesajDoctor  || 'Lichid în curs de filtrare...';
+
+            if (busy) { console.warn('[excretion] busy, ignoring trigger'); return; }
+            busy = true;
+
+            const tUreters  = Math.round(total * 0.60);
+            const tRest     = total - tUreters;
+            const tKidneys  = Math.round(tRest * 0.5);
+            const tUrethra  = tRest - tKidneys;
+
+            sphere.setAttribute('color', color);
+            sphere.setAttribute('material', 'opacity', 1);
+            sphere.setAttribute('position', '0 2 0');
+            sphere.setAttribute('visible', true);
+
+            // STEP 1 — Kidneys
+            sphere.setAttribute('animation__s1', {
+              property: 'position', from: '0 2 0', to: '0.15 0.8 0',
+              dur: tKidneys, easing: 'easeInQuad', startEvents: 'startS1'
+            });
+
+            // STEP 2 — Ureters
+            sphere.setAttribute('animation__s2', {
+              property: 'position', from: '0.15 0.8 0', to: '0 -0.5 0',
+              dur: tUreters, easing: 'easeInOutSine', startEvents: 'startS2'
+            });
+
+            // STEP 3 — Urethra
+            sphere.setAttribute('animation__s3', {
+              property: 'position', from: '0 -0.5 0', to: '0 -1.5 0',
+              dur: tUrethra, easing: 'easeInQuad', startEvents: 'startS3'
+            });
+            sphere.setAttribute('animation__fade', {
+              property: 'components.material.material.opacity',
+              from: 1, to: 0, dur: tUrethra, easing: 'easeInQuad',
+              startEvents: 'startS3'
+            });
+
+            setMessage(msg);
+            console.log(`[excretion] total:${total}ms  kidneys:${tKidneys}  ureters:${tUreters}  urethra:${tUrethra}`);
+
+            requestAnimationFrame(() => sphere.emit('startS1'));
+          };
+        }
+      });
+
+      AFRAME.registerComponent('calibration-controls', {
+        schema: { step: { default: 0.05 }, scaleStep: { default: 0.05 } },
+        init: function () {
+          const el = this.el;
+          this.handler = (e) => {
+            const pos = el.getAttribute('position');
+            const scl = el.getAttribute('scale');
+            const s = this.data.step, ss = this.data.scaleStep;
+            let handled = true;
+
+            switch (e.key) {
+              case 'ArrowLeft':  pos.x -= s; break;
+              case 'ArrowRight': pos.x += s; break;
+              case 'ArrowUp':    pos.y += s; break;
+              case 'ArrowDown':  pos.y -= s; break;
+              case 'w': case 'W': pos.z -= s; break;
+              case 's': case 'S': pos.z += s; break;
+              case '+': case '=': scl.x += ss; scl.y += ss; scl.z += ss; break;
+              case '-': case '_': scl.x -= ss; scl.y -= ss; scl.z -= ss; break;
+              case 'h': case 'H':
+                document.querySelectorAll('#doctor-ui, #calib-readout, #hint')
+                  .forEach(n => n.classList.toggle('ui-hidden'));
+                handled = false; break;
+              default: handled = false;
+            }
+            if (!handled) return;
+
+            el.setAttribute('position', pos);
+            el.setAttribute('scale', scl);
+            const txt = `pos ${pos.x.toFixed(2)} ${pos.y.toFixed(2)} ${pos.z.toFixed(2)}  ·  scale ${scl.x.toFixed(2)}`;
+            const r = document.getElementById('calib-readout');
+            if (r) r.textContent = txt;
+            console.log('[calib] ' + txt);
+          };
+          window.addEventListener('keydown', this.handler);
+        },
+        remove: function () { window.removeEventListener('keydown', this.handler); }
+      });
+
+      AFRAME.registerComponent('path-preview', {
+        init: function () {
+          this.on = false;
+          this.el.setAttribute('visible', false);
+          this.handler = (e) => {
+            if (e.key === 'p' || e.key === 'P') {
+              this.on = !this.on;
+              this.el.setAttribute('visible', this.on);
+              console.log('[path-preview] ' + (this.on ? 'ON' : 'OFF'));
+            }
+          };
+          window.addEventListener('keydown', this.handler);
+        },
+        remove: function () { window.removeEventListener('keydown', this.handler); }
+      });
+
+      function setMessage(text, tag) {
+        const box = document.getElementById('msg-box');
+        const el  = document.getElementById('mesaj-text');
+        const tg  = document.getElementById('doctor-tag');
+        if (!box || !el) return;
+        el.textContent = text;
+        if (tg) tg.textContent = tag || 'Doctor AI';
+        box.classList.remove('pulse');
+        void box.offsetWidth;
+        box.classList.add('pulse');
+      }
+
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const h = document.getElementById('hint');
+          if (h) h.classList.add('ui-hidden');
+        }, 6000);
+      });
+    </script>
+</head>
+
+<body>
+    <a-scene background="color: #000000"
+             renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true"
+             vr-mode-ui="enabled: false">
+
+        <a-assets timeout="10000">
+            <a-asset-item id="modelExcretor" src="excretor.glb"></a-asset-item>
+        </a-assets>
+
+        <a-entity id="model-rig" position="0 1.5 -3" calibration-controls>
+            <a-entity gltf-model="#modelExcretor"
+                      normalize-model="targetSize: 2.5; debug: true">
+            </a-entity>
+
+            <a-sphere id="mancare"
+                      radius="0.05" color="#fff59d"
+                      material="transparent: true; opacity: 1"
+                      position="0 2 0" visible="false"
+                      excretion-controller>
+            </a-sphere>
+
+            <a-entity id="path-preview" path-preview visible="false">
+                <a-entity line="start: 0 2 0;        end: 0.15 0.8 0; color: #94a3b8; opacity: 0.6"></a-entity>
+                <a-entity line="start: 0.15 0.8 0;   end: 0 -0.5 0;   color: #94a3b8; opacity: 0.6"></a-entity>
+                <a-entity line="start: 0 -0.5 0;     end: 0 -1.5 0;   color: #94a3b8; opacity: 0.6"></a-entity>
+
+                <a-sphere position="0 2 0" radius="0.08" color="#22d3ee"
+                          material="wireframe: true; transparent: true; opacity: 0.6"></a-sphere>
+                <a-text value="1 · Start (sus)" position="0.14 2 0" align="left"
+                        color="#22d3ee" scale="0.4 0.4 0.4"></a-text>
+
+                <a-sphere position="0.15 0.8 0" radius="0.08" color="#facc15"
+                          material="wireframe: true; transparent: true; opacity: 0.6"></a-sphere>
+                <a-text value="2 · Rinichi" position="0.29 0.8 0" align="left"
+                        color="#facc15" scale="0.4 0.4 0.4"></a-text>
+
+                <a-sphere position="0 -0.5 0" radius="0.08" color="#fb923c"
+                          material="wireframe: true; transparent: true; opacity: 0.6"></a-sphere>
+                <a-text value="3 · Vezică urinară" position="0.14 -0.5 0" align="left"
+                        color="#fb923c" scale="0.4 0.4 0.4"></a-text>
+
+                <a-sphere position="0 -1.5 0" radius="0.08" color="#f87171"
+                          material="wireframe: true; transparent: true; opacity: 0.6"></a-sphere>
+                <a-text value="4 · Uretră (excreție)" position="0.14 -1.5 0" align="left"
+                        color="#f87171" scale="0.4 0.4 0.4"></a-text>
+            </a-entity>
+        </a-entity>
+
+        <a-light type="ambient"     color="#bcd0e6" intensity="0.55"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="0.85"
+                 position="-1 2.5 1.5"></a-light>
+        <a-light type="point"       color="#ffe9c7" intensity="0.45"
+                 distance="12" position="1 2 -1"></a-light>
+
+        <a-entity camera position="0 1.5 0"
+                  look-controls="enabled: false"
+                  wasd-controls="enabled: false">
+        </a-entity>
+    </a-scene>
+
+    <div id="doctor-ui">
+        <div id="msg-box" class="pulse">
+            <h1 id="mesaj-text">Scanează QR-ul pentru a trimite un lichid în sistemul excretor...</h1>
+        </div>
+    </div>
+
+    <div id="calib-readout">pos 0.00 1.50 -3.00  ·  scale 1.00</div>
+    <div id="hint">Calibrare: ← → ↑ ↓ mută · W/S adâncime · +/- mărime · P traseu · H ascunde UI</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+const firebaseConfig = {
+
+  apiKey: "AIzaSyAXYZkfgwESkv1hwlJYZciQYHkH2--VegM",
+
+  authDomain: "proiect-bio-sist-excretor.firebaseapp.com",
+
+  databaseURL: "https://proiect-bio-sist-excretor-default-rtdb.europe-west1.firebasedatabase.app",
+
+  projectId: "proiect-bio-sist-excretor",
+
+  storageBucket: "proiect-bio-sist-excretor.firebasestorage.app",
+
+  messagingSenderId: "917162192144",
+
+  appId: "1:917162192144:web:a6f1d997248953baf44995"
+
+};
+
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getDatabase(app);
+        let firstLoad = true;
+
+        onValue(ref(db, 'aliment_trimis'), (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+            if (firstLoad) { firstLoad = false; return; }
+            if (window.triggerExcretion) window.triggerExcretion(data);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>QR — Sistemul Excretor</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
+    <style>
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0; height: 100%; background: #000000;
+        font-family: 'Roboto', Arial, Helvetica, sans-serif; color: #ffffff; overflow: hidden;
+      }
+
+      .stage {
+        height: 100vh; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 48px; padding: 40px; text-align: center;
+      }
+
+      .tag {
+        font-size: clamp(13px, 1.4vw, 18px); font-weight: 700; letter-spacing: 5px;
+        text-transform: uppercase; color: #4ade80; opacity: 0.9;
+      }
+
+      h1 {
+        margin: 0; max-width: 16ch; font-size: clamp(30px, 4.6vw, 64px);
+        font-weight: 900; line-height: 1.15; text-shadow: 0 2px 14px rgba(0,0,0,0.8);
+      }
+
+      .qr-card {
+        background: #ffffff; padding: 28px; border-radius: 26px;
+        box-shadow: 0 0 60px rgba(74, 222, 128, 0.25); line-height: 0;
+        animation: floatIn 0.7s cubic-bezier(.2,.8,.2,1) both;
+      }
+      .qr-card img, .qr-card canvas { display: block; }
+
+      @keyframes floatIn {
+        from { transform: translateY(18px) scale(0.96); opacity: 0; }
+        to   { transform: translateY(0) scale(1);       opacity: 1; }
+      }
+
+      @keyframes glow {
+        0%, 100% { box-shadow: 0 0 50px rgba(74,222,128,0.18); }
+        50%      { box-shadow: 0 0 90px rgba(74,222,128,0.40); }
+      }
+      .qr-card.live { animation: floatIn 0.7s cubic-bezier(.2,.8,.2,1) both, glow 3.2s ease-in-out 0.7s infinite; }
+
+      .hint { font-size: clamp(14px, 1.6vw, 22px); font-weight: 500; color: rgba(255,255,255,0.6); }
+      .err { color: #f87171; font-weight: 700; font-size: 18px; max-width: 30ch; }
+    </style>
+</head>
+
+<body>
+    <div class="stage">
+        <h1>Scanează codul QR pentru a prelua controlul sistemului excretor</h1>
+        <div id="qrcode" class="qr-card"></div>
+        <footer>facut din ❤️ de vladutz • 2026</footer>
+    </div>
+
+    <script>
+      (function () {
+        var here = window.location.href.split(/[?#]/)[0];
+        var controllerUrl = here.indexOf('qr.html') !== -1
+          ? here.replace('qr.html', 'controller.html')
+          : here.replace(/\/[^\/]*$/, '/controller.html');
+
+        var holder = document.getElementById('qrcode');
+        try {
+          var size = Math.min(Math.round(window.innerHeight * 0.42), 460);
+          new QRCode(holder, {
+            text: controllerUrl, width: size, height: size,
+            colorDark: "#000000", colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+          });
+          holder.classList.add('live');
+          console.log('[qr] Controller URL →', controllerUrl);
+        } catch (e) {
+          console.error('[qr] generation failed:', e);
+          holder.classList.remove('qr-card');
+          holder.innerHTML = '<p class="err">Nu am putut genera codul QR. Verifică conexiunea la internet.</p>';
+        }
+      })();
+    </script>
+</body>
+</html>

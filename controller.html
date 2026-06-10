@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0c10" />
+    <title>Control Sistem Excretor</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@500;700;900&display=swap" rel="stylesheet">
+
+    <style>
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+      html, body {
+        margin: 0; min-height: 100%;
+        font-family: 'Roboto', Arial, Helvetica, sans-serif; color: #fff;
+        background: #07090d;
+        background-image:
+          radial-gradient(1200px 600px at 50% -10%, rgba(255,238,88,0.12), transparent 60%),
+          radial-gradient(900px 500px at 100% 110%, rgba(33,150,243,0.10), transparent 55%);
+        -webkit-user-select: none; user-select: none;
+      }
+
+      .app {
+        max-width: 520px; margin: 0 auto;
+        padding: calc(env(safe-area-inset-top) + 26px) 20px calc(env(safe-area-inset-bottom) + 26px);
+        min-height: 100vh; display: flex; flex-direction: column;
+      }
+
+      header { text-align: center; margin-bottom: 22px; }
+      .badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+        color: #4ade80; background: rgba(74,222,128,0.10);
+        border: 1px solid rgba(74,222,128,0.25); padding: 6px 14px; border-radius: 999px;
+      }
+      .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #ef4444; box-shadow: 0 0 8px #ef4444;
+        transition: background .3s, box-shadow .3s;
+      }
+      .dot.online { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+      h1 { margin: 16px 0 4px; font-size: clamp(26px, 7vw, 34px); font-weight: 900; }
+      .sub { margin: 0; color: rgba(255,255,255,0.55); font-size: 14px; font-weight: 500; }
+
+      .grid { display: flex; flex-direction: column; gap: 16px; margin-top: 26px; flex: 1; }
+
+      .food-btn {
+        position: relative; overflow: hidden; width: 100%; border: none;
+        border-radius: 22px; padding: 22px 22px; color: #fff; text-align: left;
+        cursor: pointer; display: flex; align-items: center; gap: 18px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.18);
+        transition: transform .12s ease, filter .12s ease, box-shadow .12s ease;
+      }
+      .food-btn:active { transform: scale(0.96); filter: brightness(1.08); }
+      .food-btn:disabled { opacity: 0.55; filter: grayscale(0.3); }
+
+      .emoji { font-size: 40px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
+      .meta { display: flex; flex-direction: column; gap: 3px; }
+      .name { font-size: 21px; font-weight: 900; letter-spacing: .3px; }
+      .desc { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85); }
+
+      .water  { background: linear-gradient(135deg, #2196f3, #0d47a1); }
+      .coffee { background: linear-gradient(135deg, #6d4c41, #3e2723); }
+      .salty  { background: linear-gradient(135deg, #f57f17, #b71c1c); }
+
+      .ripple {
+        position: absolute; border-radius: 50%; transform: scale(0);
+        background: rgba(255,255,255,0.45); pointer-events: none;
+        animation: rippleAnim .6s ease-out;
+      }
+      @keyframes rippleAnim { to { transform: scale(2.6); opacity: 0; } }
+
+      #toast {
+        position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px);
+        transform: translate(-50%, 30px);
+        background: rgba(10,12,16,0.92); border: 1px solid rgba(255,255,255,0.14);
+        backdrop-filter: blur(8px); color: #fff; font-weight: 700; font-size: 15px;
+        padding: 14px 22px; border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,0.6);
+        opacity: 0; pointer-events: none;
+        transition: opacity .25s ease, transform .25s ease;
+        z-index: 50; display: flex; align-items: center; gap: 10px;
+      }
+      #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+      footer { text-align: center; margin-top: 20px; color: rgba(255,255,255,0.35); font-size: 12px; }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <header>
+            <h1>Control Sistem Excretor</h1>
+            <p class="sub">Apasă pentru a trimite un lichid prin rinichi</p>
+        </header>
+
+        <div class="grid" id="grid">
+            <button class="food-btn water" data-food="water">
+                <span class="emoji">💧</span>
+                <span class="meta">
+                    <span class="name">Apă</span>
+                    <span class="desc">Hidratare optimă · 4s</span>
+                </span>
+            </button>
+
+            <button class="food-btn coffee" data-food="coffee">
+                <span class="emoji">☕</span>
+                <span class="meta">
+                    <span class="name">Cafea (Diuretic)</span>
+                    <span class="desc">Filtrare rapidă · 2.5s</span>
+                </span>
+            </button>
+
+            <button class="food-btn salty" data-food="salty">
+                <span class="emoji">🧂</span>
+                <span class="meta">
+                    <span class="name">Mâncare sărată</span>
+                    <span class="desc">Retenție de apă · 7s</span>
+                </span>
+            </button>
+        </div>
+
+        <footer>facut din ❤️ de vladutz • 2026</footer>
+    </div>
+
+    <div id="toast"><span id="toast-emoji">✅</span><span id="toast-text">Trimis!</span></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+const firebaseConfig = {
+
+  apiKey: "AIzaSyAXYZkfgwESkv1hwlJYZciQYHkH2--VegM",
+
+  authDomain: "proiect-bio-sist-excretor.firebaseapp.com",
+
+  databaseURL: "https://proiect-bio-sist-excretor-default-rtdb.europe-west1.firebasedatabase.app",
+
+  projectId: "proiect-bio-sist-excretor",
+
+  storageBucket: "proiect-bio-sist-excretor.firebasestorage.app",
+
+  messagingSenderId: "917162192144",
+
+  appId: "1:917162192144:web:a6f1d997248953baf44995"
+
+};
+
+        const app = initializeApp(firebaseConfig);
+        const db  = getDatabase(app);
+
+        const FOODS = {
+            water:  { emoji: "💧", culoare: "#fff59d", timpDigestie: 4000, mesajDoctor: "💧 Hidratare optimă! Rinichii filtrează normal, urina este diluată și clară." },
+            coffee: { emoji: "☕", culoare: "#ffee58", timpDigestie: 2500, mesajDoctor: "☕ Efect Diuretic! Cafeaua forțează rinichii să elimine apa mai rapid." },
+            salty:  { emoji: "🧂", culoare: "#f57f17", timpDigestie: 7000, mesajDoctor: "🧂 Exces de sare! Rinichii rețin apa. Urina este foarte concentrată." }
+        };
+
+        const dot = document.getElementById('conn-dot');
+        const connText = document.getElementById('conn-text');
+        onValue(ref(db, '.info/connected'), (snap) => {
+            const online = snap.val() === true;
+            if (dot) dot.classList.toggle('online', online);
+            if (connText) connText.textContent = online ? 'Conectat' : 'Offline';
+        });
+
+        function ripple(btn, e) {
+            const rect = btn.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left - size / 2;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top - size / 2;
+            const span = document.createElement('span');
+            span.className = 'ripple';
+            span.style.width = span.style.height = size + 'px';
+            span.style.left = x + 'px';
+            span.style.top = y + 'px';
+            btn.appendChild(span);
+            setTimeout(() => span.remove(), 600);
+        }
+
+        let toastTimer;
+        function toast(emoji, text) {
+            document.getElementById('toast-emoji').textContent = emoji;
+            document.getElementById('toast-text').textContent = text;
+            const t = document.getElementById('toast');
+            t.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+        }
+
+        async function sendFood(key, btn, e) {
+            const food = FOODS[key];
+            if (!food) return;
+            ripple(btn, e);
+            if (navigator.vibrate) navigator.vibrate([50]);
+
+            const payload = {
+                culoare: food.culoare,
+                timpDigestie: food.timpDigestie,
+                mesajDoctor: food.mesajDoctor,
+                timestamp: Date.now()
+            };
+
+            const all = document.querySelectorAll('.food-btn');
+            all.forEach(b => b.disabled = true);
+
+            try {
+                await set(ref(db, 'aliment_trimis'), payload);
+                toast(food.emoji, 'Trimis cu succes!');
+                if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+            } catch (err) {
+                console.error('[controller] send failed:', err);
+                toast('⚠️', 'Eroare la trimitere');
+            } finally {
+                setTimeout(() => all.forEach(b => b.disabled = false), 700);
+            }
+        }
+
+        document.querySelectorAll('.food-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => sendFood(btn.dataset.food, btn, e));
+        });
+    </script>
+</body>
+</html>
